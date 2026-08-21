@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TV Stream — الإدارة</title>
+  <style>
+    :root { color-scheme: dark; font-family: Cairo, system-ui, sans-serif; background: #090b12; color: #f6f7fb; }
+    body { margin: 0; background: radial-gradient(circle at top right, #1d2140, #090b12 50%); min-height: 100vh; }
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 64px; }
+    header { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 24px; }
+    h1 { margin: 0; font-size: clamp(24px, 4vw, 42px); }
+    .muted { color: #a9afc2; }
+    .panel { background: #131724; border: 1px solid #252b41; border-radius: 20px; padding: 20px; margin-bottom: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .wide { grid-column: 1 / -1; }
+    label { display: grid; gap: 6px; color: #c9cee0; font-size: 13px; }
+    input, select, textarea { width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid #303751; border-radius: 12px; background: #0d101b; color: #fff; font: inherit; }
+    textarea { min-height: 80px; resize: vertical; }
+    button { border: 0; border-radius: 12px; padding: 11px 16px; background: #6c63ff; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #252b41; }
+    button.danger { background: #9d3d56; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+    table { border-collapse: collapse; width: 100%; min-width: 760px; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid #272d41; text-align: right; vertical-align: top; }
+    th { color: #a9afc2; font-size: 12px; }
+    .table-wrap { overflow-x: auto; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 8px; background: #242a40; font-size: 12px; }
+    .status { min-height: 24px; color: #2dd4bf; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } .wide { grid-column: auto; } header { display: block; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1>TV Stream</h1><p class="muted">إدارة القنوات والمصادر والحقوق</p></div>
+    <button class="secondary" id="loadBtn">تحديث القائمة</button>
+  </header>
+  <section class="panel">
+    <div class="grid">
+      <label>عنوان API<input id="apiBase" value="http://localhost:8000" /></label>
+      <label>مفتاح الإدارة<input id="adminKey" type="password" placeholder="X-Admin-Key" /></label>
+    </div>
+    <div class="actions"><button id="loadWithKey">تحميل القنوات</button><span class="status" id="status"></span></div>
+  </section>
+  <section class="panel">
+    <h2 id="formTitle">إضافة قناة</h2>
+    <form id="channelForm">
+      <input id="channelId" type="hidden" />
+      <div class="grid">
+        <label>الاسم<input id="name" required /></label>
+        <label>Slug<input id="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /></label>
+        <label>الدولة<input id="country" required /></label>
+        <label>التصنيف<select id="category"><option>Kids</option><option>News</option><option>General</option><option>Sports</option><option>Entertainment</option><option>Religious</option><option>Educational</option><option>Culture</option><option>International</option></select></label>
+        <label>حالة الحقوق<select id="rightsStatus"><option value="verified">verified</option><option value="official_source">official_source</option><option value="permission_required">permission_required</option><option value="unknown">unknown</option><option value="unavailable">unavailable</option></select></label>
+        <label>نوع المصدر<select id="streamType"><option value="HLS">HLS</option><option value="DASH">DASH</option><option value="WEB">WEB</option><option value="NONE">NONE</option></select></label>
+        <label>رابط الشعار<input id="logoUrl" type="url" /></label>
+        <label>رابط المصدر الرسمي<input id="sourceUrl" type="url" required /></label>
+        <label>رابط البث (للمصدر المصرح فقط)<input id="streamUrl" type="url" /></label>
+        <label class="wide">الوصف<textarea id="description"></textarea></label>
+        <label class="wide">ملاحظات الحقوق<textarea id="notes"></textarea></label>
+      </div>
+      <div class="actions"><button type="submit">حفظ</button><button type="button" class="secondary" id="resetBtn">إلغاء التعديل</button></div>
+    </form>
+  </section>
+  <section class="panel"><div class="table-wrap"><table><thead><tr><th>القناة</th><th>التصنيف</th><th>الحقوق</th><th>النشاط</th><th>إجراء</th></tr></thead><tbody id="channelRows"></tbody></table></div></section>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const fields = ['name','slug','country','category','rightsStatus','streamType','logoUrl','sourceUrl','streamUrl','description','notes'];
+  const getBase = () => $('apiBase').value.replace(/\/$/, '');
+  const headers = () => ({ 'Content-Type': 'application/json', 'X-Admin-Key': $('adminKey').value });
+  const setStatus = (text, error = false) => { $('status').textContent = text; $('status').style.color = error ? '#ff8ea8' : '#2dd4bf'; };
+  const payload = () => ({
+    name: $('name').value, slug: $('slug').value, country: $('country').value, category: $('category').value,
+    rights_status: $('rightsStatus').value, stream_type: $('streamType').value,
+    logo_url: $('logoUrl').value || null, source_url: $('sourceUrl').value,
+    stream_url: $('streamUrl').value || null, description: $('description').value || null,
+    notes: $('notes').value || null, language: 'العربية', is_active: true, is_featured: false,
+  });
+  function resetForm() { $('channelId').value = ''; $('formTitle').textContent = 'إضافة قناة'; $('channelForm').reset(); $('streamType').value = 'HLS'; $('rightsStatus').value = 'official_source'; }
+  function fillForm(channel) { $('channelId').value = channel.id; $('formTitle').textContent = `تعديل: ${channel.name}`; fields.forEach((id) => { const key = {rightsStatus:'rights_status',streamType:'stream_type',logoUrl:'logo_url',sourceUrl:'source_url',streamUrl:'stream_url'}[id] || id; $(id).value = channel[key] || ''; }); }
+  async function loadChannels() {
+    setStatus('جارٍ التحميل...');
+    try { const response = await fetch(`${getBase()}/api/admin/channels`, { headers: headers() }); if (!response.ok) throw new Error(`HTTP ${response.status}`); const channels = await response.json(); $('channelRows').innerHTML = channels.map((c) => `<tr><td><strong>${c.name}</strong><br><span class="muted">${c.country}</span></td><td>${c.category}</td><td><span class="badge">${c.rights_status}</span></td><td>${c.is_active ? 'نشطة' : 'متوقفة'}</td><td><button onclick='window.editChannel(${JSON.stringify(c)})'>تعديل</button> <button class="danger" onclick='window.deleteChannel(${c.id})'>حذف</button></td></tr>`).join(''); setStatus(`${channels.length} قناة`); }
+    catch (error) { setStatus(`تعذر التحميل: ${error.message}`, true); }
+  }
+  window.editChannel = fillForm;
+  window.deleteChannel = async (id) => { if (!confirm('حذف القناة؟')) return; const response = await fetch(`${getBase()}/api/admin/channels/${id}`, { method: 'DELETE', headers: headers() }); if (!response.ok) return setStatus(`تعذر الحذف: HTTP ${response.status}`, true); await loadChannels(); };
+  $('channelForm').addEventListener('submit', async (event) => { event.preventDefault(); const id = $('channelId').value; const response = await fetch(`${getBase()}/api/admin/channels${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', headers: headers(), body: JSON.stringify(payload()) }); if (!response.ok) return setStatus(`تعذر الحفظ: HTTP ${response.status}`, true); resetForm(); await loadChannels(); });
+  $('loadBtn').onclick = loadChannels; $('loadWithKey').onclick = loadChannels; $('resetBtn').onclick = resetForm;
+</script>
+</body>
+</html>
