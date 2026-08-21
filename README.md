@@ -83,6 +83,19 @@ PYTHONPATH=backend pytest -q backend/tests
 
 تم تضمين مصدر Mux Test Streams في البيانات كاختبار HLS تقني غير نشط، وليس كقناة عربية إنتاجية. أما القنوات ذات صفحات البث الرسمية دون تصريح إعادة توزيع واضح فتبقى بحالة `permission_required` أو `official_source` ولا تُمرر روابطها الداخلية إلى المشغل.
 
+## بناء APK صغير
+
+لإنتاج نسخة arm64 مناسبة لمعظم أجهزة Android الحديثة مع تقليل الكود والموارد، استخدم:
+
+```bash
+cd mobile
+export ANDROID_SDK_ROOT=/path/to/android-sdk
+export JAVA_HOME=/path/to/jdk-21
+flutter build apk --release --target-platform android-arm64 --split-per-abi
+```
+
+إعدادات Android تفعّل R8 و`shrinkResources` وتستخدم Gradle بذاكرة وعمال محدودين. النسخة التجريبية الحالية `app-arm64-v8a-release.apk` حجمها نحو 20 MB، وتتضمن أيقونة TV Stream المخصصة وأيقونات launcher بأحجام Android القياسية. هذه النسخة موقعة بمفتاح debug للتجربة فقط، ويجب استخدام توقيع release خاص قبل النشر.
+
 ## الخطوة التالية
 
 قبل تفعيل أي قناة إنتاجية داخل المشغل، يجب الحصول على تصريح مكتوب يحدد إعادة التضمين أو إعادة التوزيع ونطاق الدول المسموح بها. بعدها تُحدّث القناة من لوحة الإدارة إلى `verified` فقط إذا كان التصريح يغطي ذلك المصدر تحديدًا.
